@@ -418,8 +418,7 @@ describe('CSRF middleware', () => {
           headers: { Referer: 'http://localhost/page' }
         })
       )
-      expect(response.status).toBe(200)
-      expect(await response.text()).toBe('POST success')
+      expect(response.status).toBe(403)
     })
 
     it('Should block POST with non-matching Referer header', async () => {
@@ -431,6 +430,20 @@ describe('CSRF middleware', () => {
         new Request('http://localhost/test', {
           method: 'POST',
           headers: { Referer: 'http://evil.com/page' }
+        })
+      )
+      expect(response.status).toBe(403)
+    })
+
+    it('Should block POST when checkReferer is true but Referer is empty', async () => {
+      app.post('/test', csrf({ checkReferer: true }), (ctx) => {
+        ctx.res.body = 'POST success'
+      })
+
+      const response = await app.fetch(
+        new Request('http://localhost/test', {
+          method: 'POST',
+          headers: { Referer: '' }
         })
       )
       expect(response.status).toBe(403)
@@ -482,7 +495,7 @@ describe('CSRF middleware', () => {
       expect(response.status).toBe(403)
     })
 
-    it('Should allow POST with Referer when checkReferer is true and Referer matches', async () => {
+    it('Should block POST with Referer when checkReferer is true and Referer matches but origin & sec-fetch-site is unmatch', async () => {
       app.post('/test', csrf({ checkReferer: true }), (ctx) => {
         ctx.res.body = 'POST success'
       })
@@ -493,8 +506,7 @@ describe('CSRF middleware', () => {
           headers: { Referer: 'http://localhost/form' }
         })
       )
-      expect(response.status).toBe(200)
-      expect(await response.text()).toBe('POST success')
+      expect(response.status).toBe(403)
     })
   })
 
@@ -627,46 +639,6 @@ describe('CSRF middleware', () => {
       app.extend(router())
     })
 
-    it('Should pass when any validation method succeeds', async () => {
-      app.post('/test', csrf(), (ctx) => {
-        ctx.res.body = 'POST success'
-      })
-
-      const response1 = await app.fetch(
-        new Request('http://localhost/test', {
-          method: 'POST',
-          headers: {
-            Origin: 'http://localhost',
-            Referer: 'http://evil.com/page'
-          }
-        })
-      )
-      expect(response1.status).toBe(200)
-
-      const response2 = await app.fetch(
-        new Request('http://localhost/test', {
-          method: 'POST',
-          headers: {
-            Origin: 'http://evil.com',
-            Referer: 'http://localhost/page'
-          }
-        })
-      )
-      expect(response2.status).toBe(200)
-
-      const response3 = await app.fetch(
-        new Request('http://localhost/test', {
-          method: 'POST',
-          headers: {
-            'Sec-Fetch-Site': 'same-origin',
-            Origin: 'http://evil.com',
-            Referer: 'http://evil.com/page'
-          }
-        })
-      )
-      expect(response3.status).toBe(200)
-    })
-
     it('Should fail when all validation methods fail', async () => {
       app.post('/test', csrf(), (ctx) => {
         ctx.res.body = 'POST success'
@@ -752,7 +724,10 @@ describe('CSRF middleware', () => {
       const response = await app.fetch(
         new Request('http://localhost/test', {
           method: 'POST',
-          headers: { Referer: 'http://localhost/path/to/page?query=value#hash' }
+          headers: {
+            Referer: 'http://localhost/path/to/page?query=value#hash',
+            Origin: 'http://localhost'
+          }
         })
       )
       expect(response.status).toBe(200)

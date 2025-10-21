@@ -97,7 +97,6 @@ export function csrf (options: CSRFOptions = {}): HoaMiddleware {
   }
 
   const isAllowedReferer = (referer: string | undefined, ctx: HoaContext) => {
-    if (!referer) return false
     try {
       const refererUrl = new URL(referer)
       return refererUrl.origin === ctx.req.origin
@@ -109,13 +108,14 @@ export function csrf (options: CSRFOptions = {}): HoaMiddleware {
   return async function csrfMiddleware (ctx: HoaContext, next) {
     const method = ctx.req.method
     const type = ctx.req.type
-
+    const referer = ctx.req.get('referer')
+    const refererExplicitlyBad = checkReferer && !!referer && !isAllowedReferer(referer, ctx)
     if (
       !isSafeMethodRe.test(method) &&
       (!type || allowedContentTypes.some(t => type.includes(t))) &&
-      !isAllowedSecFetchSite(ctx.req.get('sec-fetch-site'), ctx) &&
-      !isAllowedOrigin(ctx.req.get('origin'), ctx) &&
-      (checkReferer ? !isAllowedReferer(ctx.req.get('referer'), ctx) : true)
+      (refererExplicitlyBad ||
+        !(isAllowedSecFetchSite(ctx.req.get('sec-fetch-site'), ctx) || isAllowedOrigin(ctx.req.get('origin'), ctx))
+      )
     ) {
       ctx.throw(403, 'Forbidden')
     }
