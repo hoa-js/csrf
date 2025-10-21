@@ -1,5 +1,4 @@
 import type { HoaContext, HoaMiddleware } from 'hoa'
-import { HttpError } from 'hoa'
 
 type IsAllowedOriginHandler = (origin: string, context: HoaContext) => boolean
 
@@ -107,21 +106,18 @@ export function csrf (options: CSRFOptions = {}): HoaMiddleware {
     }
   }
 
-  const needCSRFProtection = (method: string, contentType: string = '') => {
-    if (isSafeMethodRe.test(method)) return false
-    return !contentType || allowedContentTypes.some(type => contentType.includes(type))
-  }
-
   return async function csrfMiddleware (ctx: HoaContext, next) {
-    if (needCSRFProtection(ctx.req.method, ctx.req.type || '')) {
-      const validationResults = {
-        secFetchSite: isAllowedSecFetchSite(ctx.req.get('sec-fetch-site'), ctx),
-        origin: isAllowedOrigin(ctx.req.get('origin'), ctx),
-        referer: !checkReferer || isAllowedReferer(ctx.req.get('referer'), ctx)
-      }
-      if (!Object.values(validationResults).some(Boolean)) {
-        throw new HttpError(403, 'CSRF validation failed')
-      }
+    const method = ctx.req.method
+    const type = ctx.req.type
+
+    if (
+      !isSafeMethodRe.test(method) &&
+      (!type || allowedContentTypes.some(t => type.includes(t))) &&
+      !isAllowedSecFetchSite(ctx.req.get('sec-fetch-site'), ctx) &&
+      !isAllowedOrigin(ctx.req.get('origin'), ctx) &&
+      (checkReferer ? !isAllowedReferer(ctx.req.get('referer'), ctx) : true)
+    ) {
+      ctx.throw(403, 'Forbidden')
     }
 
     await next()

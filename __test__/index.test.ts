@@ -436,19 +436,23 @@ describe('CSRF middleware', () => {
       expect(response.status).toBe(403)
     })
 
-    it('Should allow POST without Referer when checkReferer is false', async () => {
-      app.post('/test', csrf({ checkReferer: false }), (ctx) => {
+    it('Should block POST when checkReferer=false and other validations fail', async () => {
+      app.post('/branch', csrf({ checkReferer: false }), (ctx) => {
         ctx.res.body = 'POST success'
       })
 
       const response = await app.fetch(
-        new Request('http://localhost/test', {
+        new Request('http://localhost/branch', {
           method: 'POST',
-          headers: { 'Sec-Fetch-Site': 'same-origin' }
+          headers: {
+            // Invalid Sec-Fetch-Site for default policy (expects same-origin)
+            'Sec-Fetch-Site': 'cross-site'
+            // No Origin header -> isAllowedOrigin returns false
+          }
         })
       )
-      expect(response.status).toBe(200)
-      expect(await response.text()).toBe('POST success')
+
+      expect(response.status).toBe(403)
     })
 
     it('Should block POST with invalid Referer URL format', async () => {
